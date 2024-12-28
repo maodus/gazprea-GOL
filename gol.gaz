@@ -1,0 +1,187 @@
+// Copyright (c) 2024, Nicholas Maodus
+
+// These can be adjusted to the user's desires
+const ROWS = 25;
+const COLS = 50;
+
+/**
+* @brief The `getAliveAdjacent` procedure will return the integer amount of
+* neighbouring cells in a 3x3 grid that are "alive" during the current tick.
+*
+* @param `pos` The indices of the current cell.
+* @type const tuple(integer x, integer y)
+*
+* @param `grid` A pointer reference to the game of life matrix/grid.
+* @type var integer[ROWS, COLS]
+*
+* @returns The number of neighbouring cells that are alive.
+* @type integer
+*/
+procedure getAliveAdjacent(
+    tuple(integer row, integer col) pos,
+    var integer[ROWS, COLS] grid) returns integer;
+
+/**
+* @brief The `stepGeneration` procedure will advance the simulation by one tick.
+*
+* @param `grid` A pointer reference to the game of life matrix/grid.
+* @type var integer[ROWS, COLS]
+*/
+procedure stepGeneration(var integer[ROWS, COLS] grid);
+
+/**
+* @brief The `displayGame` procedure will output the current game state to
+* the terminal.
+*
+* @param `grid` A pointer reference to the game of life matrix/grid.
+* @type var integer[ROWS, COLS]
+*/
+procedure displayGame(var integer[ROWS, COLS] grid);
+
+/**
+* @brief The `rand` procedure will generate a seeded, psuedo-random number,
+* based on the Linear Congruential Generator(LCG) algorithm.
+*
+* @param `seed` A pointer reference to seed to be used for the PRNG.
+* @type var integer
+*
+* @returns A pseudo-random number.
+* @type integer
+*/
+procedure rand(var integer seed) returns integer;
+
+procedure main() returns integer {
+    integer[ROWS, COLS] lifeMat; // Grid that holds info about all cells
+    integer seed;
+
+    "Please enter a seed: " -> std_output;
+    seed <- std_input;
+
+    loop i in 1..ROWS {
+        loop j in 1..COLS {
+            const integer randNum = rand(seed);
+            lifeMat[i, j] = randNum % 2;
+        }
+    }
+
+    // Clear the terminal
+    as<character>(27) || "[2J" -> std_output;
+
+    loop  {
+        call displayGame(lifeMat);
+        call stepGeneration(lifeMat);
+    }
+        
+
+    return 0;
+}
+
+// Tuples inside of arrays are not allowed within the spec
+/* Direction order for neighbour search
+    [1]  [2]  [3]
+    [4]  +++  [5]
+    [6]  [7]  [8]
+*/
+const integer[8] yLookup = [-1, -1, -1, 0, 0, 1, 1, 1];
+const integer[8] xLookup = [-1, 0, 1, -1, 1, -1, 0, 1];
+
+procedure getAliveAdjacent(
+    tuple(integer row, integer col) pos,
+    var integer[ROWS, COLS] grid) returns integer {
+
+    integer liveCount = 0;
+    integer i = 1;
+
+    // Iterate through all directions
+    loop while (i <= 8) {
+       const integer row = pos.row + yLookup[i];
+       const integer col = pos.col + xLookup[i];
+       
+        // Out of bounds check
+        if ((row < 1 or row > ROWS) or (col < 1 or col > COLS)){
+            i = i + 1;
+            continue;
+        } 
+
+        // Accumulate number of currently alive cells
+        if (grid[row, col] == 1 or grid[row, col] == 3) {
+            liveCount = liveCount + 1;
+        }
+
+        i = i + 1;
+    }
+
+    return liveCount;
+}
+
+procedure stepGeneration(var integer[ROWS, COLS] grid) {
+    integer i = 1;
+
+    loop while (i <= ROWS) {
+        integer j = 1;
+        loop while (j <= COLS) {
+            const integer life = grid[i, j];
+
+            // Get the number of neighbours that are alive this tick
+            const integer alive = getAliveAdjacent((i, j), grid);
+
+            if (life == 0 and alive == 3){
+                grid[i, j] = 2;
+            } else if (life == 1 and (alive < 2 or alive > 3)) {
+                grid[i, j] = 3;
+            }
+
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+}
+
+procedure displayGame(var integer[ROWS, COLS] grid) {
+    integer i = 1;
+
+    // Reset cursor position
+    as<character>(27) || "[H" -> std_output;
+
+    loop while (i <= ROWS) {
+        integer j = 1;
+        loop while (j <= COLS) {
+            integer lifeState = grid[i, j];
+
+            // Cell is born next tick
+            if (lifeState == 2) {
+                grid[i, j] = 1;
+            }
+            
+            // Cell is dead next tick
+            if (lifeState == 3) {
+                grid[i, j] = 0;
+            }
+
+            lifeState = grid[i, j]; // Update local state 
+            if (lifeState == 1){
+                '+' -> std_output;
+            } else {
+                '.' -> std_output;
+            }
+
+            j = j + 1;
+        }
+        i = i + 1;
+        '\n' -> std_output;
+    }
+}
+
+procedure rand(var integer seed) returns integer {
+    // LCG formula using libc parameters
+    integer newSeed = ((1103515245 * seed + 12345) % 2 ^ 31);
+
+    if (newSeed < 0) {
+        newSeed = newSeed * -1; // Flip signed bit
+    }
+
+    // Update the seed by reference
+    seed = newSeed;
+
+    return seed / 2 ^ 16; // Discard lower 16 bits for better entropy
+}
